@@ -1,4 +1,4 @@
-# tick-borne_pathgoens_roe_deer
+# tick-borne_pathogens_roe_deer
 This repository consists of the data of each individual tick analysed in the RåFäst project that was detached from roe deer in the Örebro area, Sweden. 
 
 Each tick has information on the estimated feeding time, whether they are positive for Borrelia spp. and/or Babesia spp., qPCR quantification of each pathogen, and pathgeon species identity. 
