@@ -3,7 +3,7 @@
 This script is designed to analyse the pathogen prevalence in ticks, and the quantification of the pathogen load, taking into account the roe deer ID that the ticks were taken from. 
 The analysis is performed to test if there are host-specific confounders affecting the accosiation between feeding time and pathogen prevlanece. 
 
-The statistical models used for analysing the prevalence of pathogens in ticks are the Generalized Estimating Equation (GEE) and the Generalized Linear Mixed Model (GLMM).
+The statistical models used for analysing the prevalence of pathogens in ticks are the Generalised Estimating Equation (GEE) and the Generalised Linear Mixed Model (GLMM).
 The statistical model used for analysing the quantification of pathogens in ticks is the Linear Mixed Model (LMM).
 
 '''
@@ -186,13 +186,6 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 # 1. DATA PREPARATION
 # ==============================================================================
 
-# Load your data
-# df = pd.read_csv('tick_data.csv')
-
-# The formula parser (patsy) interprets '/' as a division operator.
-# We must rename the target column to prevent syntax errors during modeling.
-#df = df.rename(columns={'Positiv/Negativ': 'borrelia_status'})
-
 # Explicitly cast data types to ensure the models treat them correctly:
 # - Predictor must be numeric for a continuous effect.
 # - Cluster ID must be a string/category so the model treats it as discrete groups,
@@ -204,10 +197,10 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     df['roe_deer_id'] = df['roe_deer_id'].astype(str)
 
 # ==============================================================================
-# 2. GENERALIZED ESTIMATING EQUATION (GEE)
+# 2. GENERALISED ESTIMATING EQUATION (GEE)
 # ==============================================================================
     print("======================================================")
-    print(f" 1. GENERALIZED ESTIMATING EQUATION (GEE) - statsmodels - {name}")
+    print(f" 1. GENERALISED ESTIMATING EQUATION (GEE) - statsmodels - {name}")
     print("======================================================")
 
 # WHY WE DO THIS: The GEE adjusts the standard errors of our population-level 
@@ -226,18 +219,18 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 
 
 # ==============================================================================
-# 3. GENERALIZED LINEAR MIXED MODEL (GLMM)
+# 3. GENERALISED LINEAR MIXED MODEL (GLMM)
 # ==============================================================================
     print("\n======================================================")
-    print(f" 2. GENERALIZED LINEAR MIXED MODEL (GLMM) - pure rpy2 bridge - {name}")
+    print(f" 2. GENERALISED LINEAR MIXED MODEL (GLMM) - pure rpy2 bridge - {name}")
     print("======================================================")
 
 # WHY WE DO THIS: Unlike the GEE, the GLMM explicitly models the variance caused 
 # by the host. The `(1 | roe_deer_id)` syntax calculates a "random intercept", 
-# meaning it allows the baseline probability of Borrelia to shift up or down 
+# meaning it allows the baseline probability of pathogen to shift up or down 
 # for each individual deer.
 #
-# WHY RPY2: Python's native ecosystem struggles with Generalized (logistic) mixed 
+# WHY RPY2: Python's native ecosystem struggles with Generalised (logistic) mixed 
 # models. By executing raw R code via rpy2, we access R's `lme4` package 
 # and completely bypass translation bugs associated with wrapper libraries.
 
