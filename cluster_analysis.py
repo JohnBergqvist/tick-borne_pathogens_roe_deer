@@ -4,7 +4,7 @@ This script is designed to analyse the pathogen prevalence in ticks, and the qua
 The analysis is performed to test if there are host-specific confounders affecting the accosiation between feeding time and pathogen prevlanece. 
 
 The statistical models used for analysing the prevalence of pathogens in ticks are the Generalised Estimating Equation (GEE) and the Generalised Linear Mixed Model (GLMM).
-The statistical model used for analysing the quantification of pathogens in ticks is the Linear Mixed Model (LMM).
+The statistical model used for analysing the quantification of pathogens in ticks is the Linear Mixed Model (LMM) on log10 tranformed data with L-BFGS optimisation to converge.
 
 '''
 
