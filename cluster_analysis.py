@@ -49,7 +49,9 @@ babesia_df['roe_deer_id'] = babesia_df['ID.nr.'].str.split('-').str[0]
 # the number of unique roe deer IDs, and the number of unique roe deer IDs that have the 'Developmental stage' column as 'A' (adult), 'N' (nymph), and 'L' (larva)
 
 for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
+    print(f'================== {name} dataframe information =================')
     print(f'Length of the {name} dataframe: {len(df)}')
+    print(f'Number of ticks with feeding time determined (not "?" or NaN): {df[df["feeding_time"].isin(["?", np.nan]) == False].shape[0]}')
     print(f'Number of unique roe deer IDs: {df["roe_deer_id"].nunique()}')
     # make a list of unique roe deer IDs that have the 'Developmental stage' column as 'A' (adult)
     adult_roe_deer_ids = df[df['developmental_stage'] == 'A']
@@ -82,18 +84,19 @@ for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
 # to filter only for nymphs, remove the rows with a '?' in the 'feeding_time' column, and remove the rows with missing values in the 'feeding_time' column
 
 for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
-    print(f'================== {name} key values =================')
+    print(f'================== {name} Key Values For Prevalence Analysis=================')
     print(f'Number of ticks in the {name} dataframe before filtering: {len(df)}')
     df_filtered = df[df['developmental_stage'] == 'N']
     df_filtered = df_filtered[df_filtered['feeding_time'] != '?']
     df_filtered = df_filtered.dropna(subset=['feeding_time'])
-    print(f'Number of ticks in the {name} dataframe after filtering: {len(df_filtered)}')
+    print(f'Number of ticks in the {name} dataframe after filtering (only nymps, no unknown feeding times): {len(df_filtered)}')
     print(f'Difference in number of ticks: {len(df) - len(df_filtered)}')
     print(f'Number of unique roe deer IDs in the {name} dataframe before filtering: {df["roe_deer_id"].nunique()}')
     print(f'Number of unique roe deer IDs in the {name} dataframe after filtering: {df_filtered["roe_deer_id"].nunique()}')
     print(f'Difference in the number of unique roe deer IDs: {df["roe_deer_id"].nunique() - df_filtered["roe_deer_id"].nunique()}')
     print(f'Number of ticks with {name} detected before filtering: {df[df["pathogen_status"] == "+"].shape[0]}')
     print(f'Number of ticks with {name} detected after filtering: {df_filtered[df_filtered["pathogen_status"] == "+"].shape[0]}')
+    print(f'Number of adult ticks with {name} detected before filtering: {df[(df["pathogen_status"] == "+") & (df["developmental_stage"] == "A")].shape[0]}')
     print(f'Number of unique roe deer IDs with {name} detected after filtering: {df_filtered[df_filtered["pathogen_status"] == "+"]["roe_deer_id"].nunique()}')
     # save the filtered dataframe to a new variable
     if name == 'Borrelia':
@@ -112,7 +115,7 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 # Transform the 'pathgoen_status' column to a binary variable, where 'positive' is 1 and 'negative' is 0 for both dataframes
 for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'Babesia']):
     df['pathogen_status'] = df['pathogen_status'].map({'positive': 1, 'negative': 0})
-    print(f'================== {name} pathogen status after transformation =================')
+    print(f'================== {name} pathogen status after transformation (1=positive, 0=negative) =================')
     print(f'Check the unique values in the {name} dataframe after transformation: {df["pathogen_status"].unique()}')
     print(f'Number of positive ticks in the {name} dataframe after transformation: {df[df["pathogen_status"] == 1].shape[0]}')
     print(f'Number of negative ticks in the {name} dataframe after transformation: {df[df["pathogen_status"] == 0].shape[0]}')
@@ -272,7 +275,7 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 q_borrelia_df = borrelia_df.copy()
 q_babesia_df = babesia_df.copy()
 
-# Filter the dataframes to only keep the adults and nymphs, and remove the rows with a '?' or  missing values in the 'feeding_time' column.
+# Filter the dataframes to only keep the nymphs, and remove the rows with a '?' or  missing values in the 'feeding_time' column.
 for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     print(f'================== {name} quantification analysis =================')
     print(f'Length of the dataframe before filtering: {len(q_df)}')
@@ -309,13 +312,13 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     lmm_model = smf.mixedlm("log_quantification_per_tick ~ feeding_time", 
                             q_df, 
                             groups=q_df["roe_deer_id"])
-    lmm_result = lmm_model.fit(method='cg') 
-    print(f"LMM Result with Conjugate Gradient optimisation - {name}:")
+    lmm_result = lmm_model.fit(method='lbfgs')  # Use L-BFGS optimizer for convergence
+    print(f"LMM Result with L-BFGS optimisation - {name}:")
     print(lmm_result.summary())
 
 
 # The default lmm optimiser did not converge the data, likely due to small sample sizes.
-# The Conjugate Gradient (CG) optimiser successfully converged both pathogen data, but the overall output remains the same - 
+# The L-BFGS optimiser successfully converged both pathogen data, but the overall output remains the same - 
 # we cannot determine a significant effect of feeding time on the quantity of either pathogen in ticks, likely due to the small sample size and high variability in the data.
 
 ## Borrelia:
@@ -327,3 +330,5 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 # p-value: 0.356, which is not statistically significant at the 0.05 level.
 # Coefficient of feeding duration: -0.008, indicating a small negative effect of feeding duration on the parasite load of an infected tick, but this effect is not statistically significant.
 # Host Variance: The random intercept variance (Group Var) is 0.026, indicating that there is a very small baseline difference in parasite loads depending on the host deer, but this effect is not statistically significant.
+
+# %%
