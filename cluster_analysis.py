@@ -20,7 +20,8 @@ from sklearn.linear_model import LogisticRegression
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
-# rpy2 imports for bridging Python and R directly
+
+# rpy2 imports for bridging Python and R directly - ignore the 'Error importing in API mode, Trying to import in ABI mode'. 
 import rpy2.robjects as ro
 from rpy2.robjects import pandas2ri, numpy2ri
 from rpy2.robjects.conversion import localconverter
@@ -28,21 +29,30 @@ from rpy2.robjects.conversion import localconverter
 
 # Directories 
 # define the HOME_DIR as the place where the scirpt is located, and print it to the console
-
+print(f'HOME_DIR: {Path(__file__).resolve().parent}')
 HOME_DIR = Path(__file__).resolve().parent
 
 borrelia_data_dir = HOME_DIR / 'borrelia_data.csv'
 babesia_data_dir = HOME_DIR / 'babesia_data.csv'
+roedeer_dir = HOME_DIR / 'roedeer_info.csv'
 
 # load the data
 borrelia_df = pd.read_csv(borrelia_data_dir)
 babesia_df = pd.read_csv(babesia_data_dir)
+roedeer_df = pd.read_csv(roedeer_dir)
+
+# Make a new column in both dfs called 'Test tube marking' that is the all characters before the second '-' of the column 'ID.nr.'
+borrelia_df['Test tube marking'] = borrelia_df['ID.nr.'].str.split('-').str[:2].apply('-'.join)
+babesia_df['Test tube marking'] = babesia_df['ID.nr.'].str.split('-').str[:2].apply('-'.join)
+
+# Merge the column 'Collected from animal ID.1' from the roedeer_df into both borrelia_df and babesia_df based on the 'Test tube marking' column
+borrelia_df = borrelia_df.merge(roedeer_df[['Test tube marking', 'Collected from animal ID.1']], on='Test tube marking', how='left')
+babesia_df = babesia_df.merge(roedeer_df[['Test tube marking', 'Collected from animal ID.1']], on='Test tube marking', how='left')
 
 
-
-# Make a new column in both dfs called 'roe_deer_id' that is the first characters before the first '-' of the column 'ID.nr.'
-borrelia_df['roe_deer_id'] = borrelia_df['ID.nr.'].str.split('-').str[0]
-babesia_df['roe_deer_id'] = babesia_df['ID.nr.'].str.split('-').str[0]
+# Rename the column 'Collected from animal ID.1' to 'roe_deer_id' in both dataframes
+borrelia_df.rename(columns={'Collected from animal ID.1': 'roe_deer_id'}, inplace=True)
+babesia_df.rename(columns={'Collected from animal ID.1': 'roe_deer_id'}, inplace=True)
 
 # Checks to ensure the two dataframes contain the same roe deer and tick information, and that the only difference is the pathogen prevalence information.
 # Create a loop to iterate through the two dataframes, and for each dataframe, print the length of the dataframe, 
@@ -95,6 +105,7 @@ for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
     print(f'Number of unique roe deer IDs in the {name} dataframe after filtering: {df_filtered["roe_deer_id"].nunique()}')
     print(f'Difference in the number of unique roe deer IDs: {df["roe_deer_id"].nunique() - df_filtered["roe_deer_id"].nunique()}')
     print(f'Number of ticks with {name} detected before filtering: {df[df["pathogen_status"] == "+"].shape[0]}')
+    print(f'Number of nymph ticks with {name} without determined feeding time (before filtering): {df[(df["pathogen_status"] == "+") & (df["developmental_stage"] == "N") & (df["feeding_time"].isin(["?", np.nan]))].shape[0]}')
     print(f'Number of ticks with {name} detected after filtering: {df_filtered[df_filtered["pathogen_status"] == "+"].shape[0]}')
     print(f'Number of adult ticks with {name} detected before filtering: {df[(df["pathogen_status"] == "+") & (df["developmental_stage"] == "A")].shape[0]}')
     print(f'Number of unique roe deer IDs with {name} detected after filtering: {df_filtered[df_filtered["pathogen_status"] == "+"]["roe_deer_id"].nunique()}')
@@ -275,11 +286,12 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 q_borrelia_df = borrelia_df.copy()
 q_babesia_df = babesia_df.copy()
 
+
 # Filter the dataframes to only keep the nymphs, and remove the rows with a '?' or  missing values in the 'feeding_time' column.
 for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     print(f'================== {name} quantification analysis =================')
     print(f'Length of the dataframe before filtering: {len(q_df)}')
-    q_df = q_df[q_df['developmental_stage'].isin(['N', 'A'])]
+    q_df = q_df[q_df['developmental_stage'].isin(['N'])]
     print(f'Length of the dataframe after filtering for developmental stage: {len(q_df)}')
     q_df = q_df[q_df['feeding_time'] != '?']
     print(f'Length of the dataframe after filtering for feeding time: {len(q_df)}')
@@ -300,6 +312,12 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     q_df['quantification'] = pd.to_numeric(q_df['quantification'], errors='coerce')
     # transform the 'quantification' column to log10 scale, and add a small constant to avoid log(0)
     q_df['log_quantification_per_tick'] = np.log10(q_df['quantification'] + 1)
+
+    # apply the edits to the df
+    if name == 'Borrelia':
+        q_df_borrelia = q_df.copy()
+    else:
+        q_df_babesia = q_df.copy()
 
     # Perform the Linear Mixed Model (LMM) analysis using statsmodels for the log-transformed quantification of 
     # the pathogen in ticks, while accounting for the clustering effect of roe deer ID.
@@ -330,5 +348,28 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 # p-value: 0.356, which is not statistically significant at the 0.05 level.
 # Coefficient of feeding duration: -0.008, indicating a small negative effect of feeding duration on the parasite load of an infected tick, but this effect is not statistically significant.
 # Host Variance: The random intercept variance (Group Var) is 0.026, indicating that there is a very small baseline difference in parasite loads depending on the host deer, but this effect is not statistically significant.
+
+
+
+
+# =============== Plotting the relationship between feeding time and log10-transformed quantification of pathogens in ticks ===============
+plt.figure(figsize=(6, 4))
+sns.regplot(data=q_df_borrelia, x='feeding_time', y='log_quantification_per_tick', ci=95)
+plt.title(f"Borrelia Load vs Feeding Time (N={len(q_df_borrelia)})")
+plt.ylabel("Log10 Quantification per Tick", fontsize=12)
+plt.xlabel("Feeding Time (hours)", fontsize=12)
+plt.show()
+
+# The 'ÖCT90-14-47' ID.nr. is an outlier at feeding time 92hrs. Removing this datapoint brings the p-value of the LMM from 0.028 to 0.052.
+q_df_babesia = q_df_babesia[q_df_babesia['ID.nr.'] != 'ÖCT90-14-47']
+
+plt.figure(figsize=(6, 4))
+sns.regplot(data=q_df_babesia, x='feeding_time', y='log_quantification_per_tick', ci=95)
+plt.title(f"Babesia Load vs Feeding Time (N={len(q_df_babesia)})")
+plt.ylabel("Log10 Quantification per Tick", fontsize=12)
+plt.xlabel("Feeding Time (hours)", fontsize=12)
+plt.show()
+
+
 
 # %%
