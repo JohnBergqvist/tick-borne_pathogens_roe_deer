@@ -4,7 +4,7 @@ This script is designed to analyse the pathogen prevalence in ticks, and the qua
 The analysis is performed to test if there are host-specific confounders affecting the accosiation between feeding time and pathogen prevlanece. 
 
 The statistical models used for analysing the prevalence of pathogens in ticks are the Generalised Estimating Equation (GEE) and the Generalised Linear Mixed Model (GLMM).
-The statistical model used for analysing the quantification of pathogens in ticks is the Linear Mixed Model (LMM) on log10 tranformed data with L-BFGS optimisation to converge.
+The statistical models used for analysing the on log10 tranformed data quantification of pathogens in ticks is OLS linear regression, Spearman's rank correlation, and the Linear Mixed Model (LMM)  with L-BFGS optimisation to converge.
 
 '''
 
@@ -19,6 +19,7 @@ import seaborn as sns
 from sklearn.linear_model import LogisticRegression
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from scipy.stats import spearmanr
 
 
 # rpy2 imports for bridging Python and R directly - ignore the 'Error importing in API mode, Trying to import in ABI mode'. 
@@ -134,22 +135,33 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 # define the colors to be used in the plots - grey for negative ticks and red for positive ticks
 colors = {'negative': 'grey', 'positive': 'red'}
 
-# Perform logistic regression for both dataframes to assess the association between feeding time and pathogen prevalence, while accounting for the clustering effect of roe deer ID.
+# Perform Simple logistic regression for both dataframes to assess the association between feeding time and pathogen prevalence, while accounting for the clustering effect of roe deer ID.
 for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'Babesia']):
-    print(f'================== {name} logistic regression =================')
-    # Fit the logistic regression model
-    X = df[['feeding_time']]
-    y = df['pathogen_status']
-    model = LogisticRegression()
-    model.fit(X, y)
-    # Print the coefficients and intercept
-    print(f'Coefficients: {model.coef_}')
-    print(f'Intercept: {model.intercept_}')
-    feeding_time_range = np.linspace(df['feeding_time'].min(), df['feeding_time'].max(), 100).reshape(-1, 1)
-    predicted_probabilities = model.predict_proba(feeding_time_range)[:, 1]
-    # Plot the logistic regression curve, where the colour of the points is determined by the roe deer ID
+    print(f'================== {name} Simple logistic regression =================')
+    
+    # Fit standard, unpenalized logistic regression
+    model = smf.logit('pathogen_status ~ feeding_time', data=df).fit()
+    
+    # 1. Print the full summary table (includes coef, SE, z, P>|z|, and 95% CIs)
+    print(model.summary())
+    
+    # 2. Extract specific values directly
+    intercept = model.params['Intercept']
+    intercept_se = model.bse['Intercept']
+    slope = model.params['feeding_time']
+    slope_se = model.bse['feeding_time']
+    p_value = model.pvalues['feeding_time']
+    
+    print(f"\nIntercept: {intercept:.4f} (SE = {intercept_se:.4f})")
+    print(f"Slope (feeding_time): {slope:.4f} (SE = {slope_se:.4f}, p = {p_value:.4e})\n")
+    
+    # 3. Generate predictions for the logistic curve
+    feeding_time_range = np.linspace(df['feeding_time'].min(), df['feeding_time'].max(), 100)
+    pred_df = pd.DataFrame({'feeding_time': feeding_time_range})
+    predicted_probabilities = model.predict(pred_df)
+    
+    # 4. Initialize plot and draw observed data points
     plt.figure(figsize=(10, 6))
-    # Scatter plot of the actual data points, colored by roe deer ID
     sns.scatterplot(
         x='feeding_time',
         y='pathogen_status',
@@ -172,8 +184,6 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     plt.close()
 
 # plot the number of positive and negative ticks for each roe deer ID in a stacked bar chart for both dataframes
-
-
 for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'Babesia']):
     print(f'================== {name} stacked bar chart =================')
     # count the number of positive and negative ticks for each roe deer ID
@@ -193,7 +203,8 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 
 
 
-# %%
+
+#%%
 #### ============================ CLUSTER ANALYSIS ============================ ####
 
 # ==============================================================================
@@ -281,13 +292,39 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 
 # %%
 
-#####==================== Quantification analysis ====================#####
+#####==================== PATHOGEN QUANTIFICATION ANALYSIS====================#####
 
+# Checking the range of quantification values for both pathogens, and the number of positive and negative ticks in each dataframe.
 q_borrelia_df = borrelia_df.copy()
 q_babesia_df = babesia_df.copy()
 
+for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
+    q_df['pathogen_status'] = np.where(q_df['pathogen_status'] == '+', 'positive', 'negative')
+    print(f'Number of positive ticks in the {name} dataframe: {q_df[q_df["pathogen_status"] == "positive"].shape[0]}')
+    print(f'Number of negative ticks in the {name} dataframe: {q_df[q_df["pathogen_status"] == "negative"].shape[0]}')
+    # keep only the positive ticks to analyse the quantity of pathogen in the ticks
+    q_df = q_df[q_df['pathogen_status'] == 'positive']
+    print(f'Before any filtering, the {name} dataframe has {len(q_df)} rows ({name}-positive ticks).')
+    print(f"Range of quantification values for {name}: min={q_df['quantification'].min():.2e}, max={q_df['quantification'].max():.2e}, median={q_df['quantification'].median():.2e}")
+    adults = q_df[q_df['developmental_stage'] == 'A']
+    print(f'Range of quantification values for {name} in adult ticks: number of observations={len(adults)}, min={adults["quantification"].min():.2e}, max={adults["quantification"].max():.2e}, median={adults["quantification"].median():.2e}')
+    nymphs = q_df[q_df['developmental_stage'] == 'N']
+    print(f'Range of quantification values for {name} in nymph ticks: number of observations={len(nymphs)}, min={nymphs["quantification"].min():.2e}, max={nymphs["quantification"].max():.2e}, median={nymphs["quantification"].median():.2e}')
+    if name == 'Borrelia':
+        # remove the 'B. miyamotoi' positive ticks from the quantification dataset of borrelia
+        nymphs_no_Bm = nymphs[nymphs['borrelia_species'] != 'B. miyamotoi']
+        print(f'After removing B. miyamotoi positive ticks, the {name} dataframe has {len(nymphs_no_Bm)} rows ({name}-positive ticks).')
+        print(f"Range of quantification values for {name} after removing B. miyamotoi: min={nymphs_no_Bm['quantification'].min():.2e}, max={nymphs_no_Bm['quantification'].max():.2e}, median={nymphs_no_Bm['quantification'].median():.2e}")
+    else:
+        continue
 
-# Filter the dataframes to only keep the nymphs, and remove the rows with a '?' or  missing values in the 'feeding_time' column.
+# Filtering the dataframes for qunatification analysis: only nymphs, no unknown feeding times, and no missing values in feeding time.        
+q_borrelia_df = borrelia_df.copy()
+q_babesia_df = babesia_df.copy()
+
+# Remove 'B. miyamotoi' positive ticks from the quantification dataset of borrelia
+q_borrelia_df = q_borrelia_df[q_borrelia_df['borrelia_species'] != 'B. miyamotoi']
+
 for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     print(f'================== {name} quantification analysis =================')
     print(f'Length of the dataframe before filtering: {len(q_df)}')
@@ -319,6 +356,47 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     else:
         q_df_babesia = q_df.copy()
 
+### ====================== Without clustering of roe deer ID====================== ###
+    print("\n======================================================")
+    print(f" LINEAR REGRESSION (OLS) - statsmodels - {name} ")
+    print("======================================================")
+    # Fit standard, unpenalized linear regression
+    model = smf.ols('log_quantification_per_tick ~ feeding_time', data=q_df).fit()
+    
+    # 1. Print the full summary table (includes coef, SE, t, P>|t|, and 95% CIs)
+    print(model.summary())
+    
+    # 2. Extract specific values directly:
+    intercept = model.params['Intercept']
+    intercept_se = model.bse['Intercept']
+    slope = model.params['feeding_time']
+    slope_se = model.bse['feeding_time']
+    p_value = model.pvalues['feeding_time']
+
+    print(f"\nIntercept: {intercept:.4f} (SE = {intercept_se:.4f})")
+    print(f"Slope (feeding_time): {slope:.4f} (SE = {slope_se:.4f}, p = {p_value:.4e})\n")
+    from statsmodels.stats.diagnostic import het_breuschpagan
+
+    bp_test = het_breuschpagan(model.resid, model.model.exog)
+    print(
+         f'Breusch-Pagan p-value: {bp_test[1]:.4f}'
+    )  # p > 0.05 means constant variance holds!
+    
+
+    # Also perform Spearman’s Rank-Order Correlation on this data to assess the monotonic relationship between feeding time and pathogen load in ticks, without assuming a linear relationship.
+    # Spearman Rank-Order Correlation (via scipy.stats)
+    print("\n======================================================")
+    print(f" SPEARMAN RANK-ORDER CORRELATION - statsmodels - {name} ")
+    print("======================================================")
+    rho, spearman_p = spearmanr(
+        q_df['feeding_time'], q_df['log_quantification_per_tick']
+    )
+    print(
+        f"Spearman's rank correlation (rho): {rho:.4f} (p = {spearman_p:.4e})\n"
+    )
+
+### ====================== With clustering of roe deer ID====================== ###
+
     # Perform the Linear Mixed Model (LMM) analysis using statsmodels for the log-transformed quantification of 
     # the pathogen in ticks, while accounting for the clustering effect of roe deer ID.
     print("\n======================================================")
@@ -339,17 +417,6 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 # The L-BFGS optimiser successfully converged both pathogen data, but the overall output remains the same - 
 # we cannot determine a significant effect of feeding time on the quantity of either pathogen in ticks, likely due to the small sample size and high variability in the data.
 
-## Borrelia:
-# p-value: 0.861, which is not statistically significant at the 0.05 level. 
-# Coefficient of feeding duration: -0.002, indicating a very small negative effect of feeding duration on the bacterial load of an infected tick, but this effect is not statistically significant.
-# Host Variance: The random intercept variance (Group Var) is 0.107, indicating that there is a small baseline difference in bacterial loads depending on the host deer, but this effect is not statistically significant.
-
-## Babesia:
-# p-value: 0.356, which is not statistically significant at the 0.05 level.
-# Coefficient of feeding duration: -0.008, indicating a small negative effect of feeding duration on the parasite load of an infected tick, but this effect is not statistically significant.
-# Host Variance: The random intercept variance (Group Var) is 0.026, indicating that there is a very small baseline difference in parasite loads depending on the host deer, but this effect is not statistically significant.
-
-
 
 
 # =============== Plotting the relationship between feeding time and log10-transformed quantification of pathogens in ticks ===============
@@ -360,8 +427,8 @@ plt.ylabel("Log10 Quantification per Tick", fontsize=12)
 plt.xlabel("Feeding Time (hours)", fontsize=12)
 plt.show()
 
-# The 'ÖCT90-14-47' ID.nr. is an outlier at feeding time 92hrs. Removing this datapoint brings the p-value of the LMM from 0.028 to 0.052.
-q_df_babesia = q_df_babesia[q_df_babesia['ID.nr.'] != 'ÖCT90-14-47']
+# The 'ÖCT90-14-47' ID.nr. is an outlier at feeding time 92hrs. Removing this datapoint brings the p-value of the LMM from 0.028 to 0.052 for Babesia spp.
+#q_df_babesia = q_df_babesia[q_df_babesia['ID.nr.'] != 'ÖCT90-14-47']
 
 plt.figure(figsize=(6, 4))
 sns.regplot(data=q_df_babesia, x='feeding_time', y='log_quantification_per_tick', ci=95)
@@ -369,7 +436,6 @@ plt.title(f"Babesia Load vs Feeding Time (N={len(q_df_babesia)})")
 plt.ylabel("Log10 Quantification per Tick", fontsize=12)
 plt.xlabel("Feeding Time (hours)", fontsize=12)
 plt.show()
-
 
 
 # %%
