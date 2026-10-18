@@ -31,6 +31,9 @@ from scipy import stats as sp_stats
 import rpy2.robjects as ro
 from rpy2.robjects import pandas2ri, numpy2ri
 from rpy2.robjects.conversion import localconverter
+
+
+
 #%%
 
 # Directories 
@@ -495,5 +498,31 @@ print(f'Chi-square statistic: {chi2:.2f}')
 print(f'P-value: {p_value:.4f}')
 print(f'Degrees of freedom: {dof}')
 print(f'Expected frequencies:\n{expected}')
+
+# %%
+import sys
+import matplotlib
+import numpy as np
+import pandas as pd
+import rpy2.robjects as ro
+import scipy
+import seaborn as sns
+import statsmodels
+
+print(f'Matplotlib: {matplotlib.__version__}') # only for plotting, not for analysis
+print(f'Seaborn: {sns.__version__}') # only for plotting, not for analysis
+
+print(f'Python version: {sys.version.split()[0]}')
+print(f'pandas: {pd.__version__}')
+print(f'NumPy: {np.__version__}')
+print(f'statsmodels: {statsmodels.__version__}')
+print(f'SciPy: {scipy.__version__}')
+
+r_version = ro.r('R.version.string')[0]
+lme4_version = ro.r('as.character(packageVersion("lme4"))')[0]
+
+print(f"rpy2: {version('rpy2')}")
+print(f'R version: {r_version}')
+print(f'lme4 version: {lme4_version}')
 
 # %%
