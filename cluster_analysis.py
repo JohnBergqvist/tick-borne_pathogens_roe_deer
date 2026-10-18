@@ -141,6 +141,7 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     df_filtered = df[df['developmental_stage'] == 'N'] # keep only nymphs
     df_filtered = df_filtered[df_filtered['feeding_time'] != '?'] # remove rows with undetermined feeding times
     df_filtered = df_filtered.dropna(subset=['feeding_time']) # remove rows with missing values in feeding time (undetermined feeding times)
+    df_filtered['feeding_time'] = pd.to_numeric(df_filtered['feeding_time'])
     print(f'Number of ticks in the {name} dataframe after filtering (only nymps, no unknown feeding times): {len(df_filtered)}')
     print(f'Number of ticks removed during filtering: {len(df) - len(df_filtered)}')
     print(f'Number of unique roe deer IDs in the {name} dataframe before filtering: {df["roe_deer_id"].nunique()}')
@@ -324,6 +325,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     # keep only the positive ticks to analyse the quantity of pathogen in the ticks
     q_df = q_df[q_df['pathogen_status'] == 'positive']
     print(f'Before any filtering, the {name} dataframe has {len(q_df)} rows ({name}-positive ticks).')
+    q_df['quantification'] = pd.to_numeric(q_df['quantification'], errors='coerce')
     print(f"Range of quantification values for {name}: min={q_df['quantification'].min():.2e}, max={q_df['quantification'].max():.2e}, median={q_df['quantification'].median():.2e}")
     adults = q_df[q_df['developmental_stage'] == 'A']
     print(f'Range of quantification values for {name} in adult ticks: number of observations={len(adults)}, min={adults["quantification"].min():.2e}, max={adults["quantification"].max():.2e}, median={adults["quantification"].median():.2e}')
@@ -356,8 +358,6 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     q_df['feeding_time'] = pd.to_numeric(q_df['feeding_time'])
     # Ensure the 'roe_deer_id' column is treated as a string (categorical variable)
     q_df['roe_deer_id'] = q_df['roe_deer_id'].astype(str)
-    # transformt the 'pathogen_status' column to 'positive' for '+' and 'negative' for blank spaces
-    #q_df['pathogen_status'] = np.where(q_df['pathogen_status'] == '+', 'positive', 'negative')
     print(f'Number of positive ticks in the {name} dataframe: {q_df[q_df["pathogen_status"] == "positive"].shape[0]}')
     print(f'Number of negative ticks in the {name} dataframe: {q_df[q_df["pathogen_status"] == "negative"].shape[0]}')
     # keep only the positive ticks to analyse the quantity of pathogen in the ticks
@@ -432,8 +432,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 
 
 # The default lmm optimiser did not converge the data, likely due to small sample sizes.
-# The L-BFGS optimiser successfully converged both pathogen data, but the overall output remains the same - 
-# we cannot determine a significant effect of feeding time on the quantity of either pathogen in ticks, likely due to the small sample size and high variability in the data.
+# The L-BFGS optimiser successfully converged both pathogen data, but the overall output remains the same
 
 
 
@@ -485,21 +484,34 @@ print(f'Percentage of ticks positive for both Borrelia and Babesia out of all ti
 
 
 
-# Calculate the anticipated co-occurrence of Borrelia and Babesia in ticks
+# 1. Calculate the anticipated co-occurrence of Borrelia and Babesia in ticks
 print('================== Chi-square test for co-occurrence of Borrelia and Babesia in ticks =================')
 
 # Create a contingency table for the Chi-square test
 contingency_table = pd.crosstab(merged_df['pathogen_status_borrelia'], merged_df['pathogen_status_babesia'])
 print(f'Contingency table:\n{contingency_table}')
 
-# Perform the Chi-square test using scipy.stats (sp_stats)
-chi2, p_value, dof, expected = sp_stats.chi2_contingency(contingency_table)
-print(f'Chi-square statistic: {chi2:.2f}')
-print(f'P-value: {p_value:.4f}')
-print(f'Degrees of freedom: {dof}')
-print(f'Expected frequencies:\n{expected}')
+
+# 2. Uncorrected Pearson's Chi-square (matches GraphPad Prism's standard Chi-square)
+chi2_uncorr, p_uncorr, dof, expected = sp_stats.chi2_contingency(
+    contingency_table, correction=False
+)
+
+# 3. Yates-corrected Chi-square (SciPy's default)
+chi2_yates, p_yates, _, _ = sp_stats.chi2_contingency(
+    contingency_table, correction=True
+)
+
+# 4. Fisher's Exact Test (Gold standard for 2x2 tables with small expected counts - 5.49 ticks in our case which is close to minimum expected count for using Chi-square)
+odds_ratio, fisher_p = sp_stats.fisher_exact(contingency_table)
+
+print(f'Uncorrected Chi2: {chi2_uncorr:.4f} (p = {p_uncorr:.4f})')
+print(f'Yates-corrected Chi2: {chi2_yates:.4f} (p = {p_yates:.4f})')
+print(f"Fisher's Exact Test OR: {odds_ratio:.4f} (p = {fisher_p:.4f})")
 
 # %%
+# ================== PRINTING THE VERSIONS OF THE LIBRARIES USED IN THIS SCRIPT =================
+
 import sys
 import matplotlib
 import numpy as np
@@ -508,6 +520,7 @@ import rpy2.robjects as ro
 import scipy
 import seaborn as sns
 import statsmodels
+from importlib.metadata import version
 
 print(f'Matplotlib: {matplotlib.__version__}') # only for plotting, not for analysis
 print(f'Seaborn: {sns.__version__}') # only for plotting, not for analysis
