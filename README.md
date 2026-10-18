@@ -4,21 +4,33 @@ This repository consists of the data of each individual tick analysed in the Rå
 
 **Pathogen-specific associations between feeding duration and detection of Borrelia and Babesia in Ixodes ricinus collected from roe deer**
 *Authors:* 
-[Peter Wilhelmsson1,2*†
-John Bergqvist1,5,6*
-Petter Kjellander3
-Hans Fredlund4
-Madeleine Christensson3
-Per-Eric Lindgren1,2
+
+[Peter Wilhelmsson 1,2*†
+
+John Bergqvist 1,5,6*
+
+Petter Kjellander 3
+
+Hans Fredlund 4
+
+Madeleine Christensson 3
+
+Per-Eric Lindgren 1,2
 
 †Corresponding author
+
 *These authors contributed equally to this work.
 
 1 Division of Inflammation and Infection, Department of Biomedical and Clinical Sciences, Linköping University, Linköping, Sweden
+
 2 Division of Clinical Microbiology, Department of Laboratory Medicine, Region Jönköping County, Jönköping, Sweden
+
 3 Grimö Wildlife Research Station, Department of Ecology, Swedish University of Agricultural Sciences, Riddarhyttan, Sweden
+
 4 Department of Laboratory Medicine, Faculty of Medicine and Health, Örebro University, Örebro, Sweden
+
 5 Present address: MRC Laboratory of Medical Sciences, London, UK 
+
 6 Present address: Institute of Clinical Sciences, Imperial College London, London, UK]
 
 
