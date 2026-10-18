@@ -1,10 +1,16 @@
 '''
 (C) John Bergqvist 2026
+
+Affiliation: 
+Division of Inflammation and Infection, Department of Biomedical and Clinical Sciences, Linköping University, Linköping, Sweden
+MRC Laboratory of Medical Sciences, London, UK
+Institute of Clinical Sciences, Imperial College London, London, UK
+
 This script is designed to analyse the pathogen prevalence in ticks, and the quantification of the pathogen load, taking into account the roe deer ID that the ticks were taken from. 
 The analysis is performed to test if there are host-specific confounders affecting the accosiation between feeding time and pathogen prevlanece. 
 
-The statistical models used for analysing the prevalence of pathogens in ticks are the Generalised Estimating Equation (GEE) and the Generalised Linear Mixed Model (GLMM).
-The statistical models used for analysing the on log10 tranformed data quantification of pathogens in ticks is OLS linear regression, Spearman's rank correlation, and the Linear Mixed Model (LMM)  with L-BFGS optimisation to converge.
+The statistical models used for analysing the prevalence of pathogens in ticks are the simple logistic regression analysis and the Generalised Linear Mixed Model (GLMM).
+The statistical models used for analysing the log10 tranformed data quantification of pathogens in ticks is OLS linear regression, Spearman's rank correlation, and the Linear Mixed Model (LMM)  with L-BFGS optimisation to converge.
 
 '''
 
@@ -16,10 +22,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.linear_model import LogisticRegression
-import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from scipy.stats import spearmanr
+from scipy import stats as sp_stats
 
 
 # rpy2 imports for bridging Python and R directly - ignore the 'Error importing in API mode, Trying to import in ABI mode'. 
@@ -42,6 +47,10 @@ borrelia_df = pd.read_csv(borrelia_data_dir)
 babesia_df = pd.read_csv(babesia_data_dir)
 roedeer_df = pd.read_csv(roedeer_dir)
 
+
+####### ========== DATA QUALITY CONTROL CHECKS ==========
+print(f'========== DATA QUALITY CONTROL CHECKS ==========')
+
 # Make a new column in both dfs called 'Test tube marking' that is the all characters before the second '-' of the column 'ID.nr.'
 borrelia_df['Test tube marking'] = borrelia_df['ID.nr.'].str.split('-').str[:2].apply('-'.join)
 babesia_df['Test tube marking'] = babesia_df['ID.nr.'].str.split('-').str[:2].apply('-'.join)
@@ -50,14 +59,26 @@ babesia_df['Test tube marking'] = babesia_df['ID.nr.'].str.split('-').str[:2].ap
 borrelia_df = borrelia_df.merge(roedeer_df[['Test tube marking', 'Collected from animal ID.1']], on='Test tube marking', how='left')
 babesia_df = babesia_df.merge(roedeer_df[['Test tube marking', 'Collected from animal ID.1']], on='Test tube marking', how='left')
 
-
 # Rename the column 'Collected from animal ID.1' to 'roe_deer_id' in both dataframes
 borrelia_df.rename(columns={'Collected from animal ID.1': 'roe_deer_id'}, inplace=True)
 babesia_df.rename(columns={'Collected from animal ID.1': 'roe_deer_id'}, inplace=True)
 
+# Ensure that the same tick 'ID.nr' values are present in both dataframes
+borrelia_df = borrelia_df.sort_values(by='ID.nr.').reset_index(drop=True)
+babesia_df = babesia_df.sort_values(by='ID.nr.').reset_index(drop=True)
+
+# Check that the 'ID.nr' column contains the same values in both dataframes, and print the values that are different if there are any differences
+for df1, df2, name1, name2 in zip([borrelia_df], [babesia_df], ['Borrelia'], ['Babesia']):
+    if not df1['ID.nr.'].equals(df2['ID.nr.']):
+        print(f'The ID.nr. columns in the {name1} and {name2} dataframes are not equal.')
+        print(f'Values in {name1} but not in {name2}: {set(df1["ID.nr."]) - set(df2["ID.nr."])}')
+        print(f'Values in {name2} but not in {name1}: {set(df2["ID.nr."]) - set(df1["ID.nr."])}')
+    else:
+        print(f'The ID.nr. columns in the {name1} and {name2} dataframes are equal.')
+
 # Checks to ensure the two dataframes contain the same roe deer and tick information, and that the only difference is the pathogen prevalence information.
-# Create a loop to iterate through the two dataframes, and for each dataframe, print the length of the dataframe, 
-# the number of unique roe deer IDs, and the number of unique roe deer IDs that have the 'Developmental stage' column as 'A' (adult), 'N' (nymph), and 'L' (larva)
+# This loop iterates through the two dataframes, and for each dataframe, prints the length of the dataframe, 
+#   the number of unique roe deer IDs, and the number of unique roe deer IDs that have the 'Developmental stage' column as 'A' (adult), 'N' (nymph), and 'L' (larva)
 
 for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
     print(f'================== {name} dataframe information =================')
@@ -84,63 +105,71 @@ for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
     print(f'Unique roe deer IDs with both nymph and larva ticks: {overlap_roe_deer_ids}')
     # print the number of unique row deer IDs that have a '?' or 'NaN' in 'feeding_time' column
     print(f'Number of unique tick ID "ID.nr." with unknown feeding time: {df[df["feeding_time"].isin(["?", np.nan])]["ID.nr."].nunique()}')
+    # change the 'pathogen_status' column to 'positive' for '+' and 'negative' for blank spaces in both dataframes
+    print(f'================== {name} pathogen status =================')
+    df['pathogen_status'] = np.where(df['pathogen_status'] == '+', 'positive', 'negative')
+    print(f'Number of positive ticks in the {name} dataframe: {df[df["pathogen_status"] == "positive"].shape[0]}')
+    print(f'Number of negative ticks in the {name} dataframe: {df[df["pathogen_status"] == "negative"].shape[0]}')
+
+        # save the filtered dataframe to a new variable
+    if name == 'Borrelia':
+        borrelia_df = df
+    else:
+        babesia_df = df
 
 
 #%%
 
 ###============================ PATHOGEN PREVALENCE ANALYSIS ============================###
-# This analsis is only performed on the ticks that are nymphs.
+# This analsis is only performed on the nymphs.
 
-# create a loop to filter the two dataframes to only contain rows with the letter 'N' in the 'developmental_stage' column
-# to filter only for nymphs, remove the rows with a '?' in the 'feeding_time' column, and remove the rows with missing values in the 'feeding_time' column
+# define the colors to be used in the plots - grey for negative ticks and red for positive ticks
+colors = {'negative': 'grey', 'positive': 'red'}
 
-for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
+# 1. A loop that filters the two dataframes to only contain rows with the letter 'N' in the 'developmental_stage' column (nymphs),
+## remove the rows with a '?' in the 'feeding_time' column (undetermined feeding times), and remove the rows with missing values 
+## in the 'feeding_time' column (undetermined feeding times).
+borrelia_df_filtered = borrelia_df.copy()
+babesia_df_filtered = babesia_df.copy()
+
+for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'Babesia']):
     print(f'================== {name} Key Values For Prevalence Analysis=================')
     print(f'Number of ticks in the {name} dataframe before filtering: {len(df)}')
-    df_filtered = df[df['developmental_stage'] == 'N']
-    df_filtered = df_filtered[df_filtered['feeding_time'] != '?']
-    df_filtered = df_filtered.dropna(subset=['feeding_time'])
+    df_filtered = df[df['developmental_stage'] == 'N'] # keep only nymphs
+    df_filtered = df_filtered[df_filtered['feeding_time'] != '?'] # remove rows with undetermined feeding times
+    df_filtered = df_filtered.dropna(subset=['feeding_time']) # remove rows with missing values in feeding time (undetermined feeding times)
     print(f'Number of ticks in the {name} dataframe after filtering (only nymps, no unknown feeding times): {len(df_filtered)}')
-    print(f'Difference in number of ticks: {len(df) - len(df_filtered)}')
+    print(f'Number of ticks removed during filtering: {len(df) - len(df_filtered)}')
     print(f'Number of unique roe deer IDs in the {name} dataframe before filtering: {df["roe_deer_id"].nunique()}')
     print(f'Number of unique roe deer IDs in the {name} dataframe after filtering: {df_filtered["roe_deer_id"].nunique()}')
-    print(f'Difference in the number of unique roe deer IDs: {df["roe_deer_id"].nunique() - df_filtered["roe_deer_id"].nunique()}')
-    print(f'Number of ticks with {name} detected before filtering: {df[df["pathogen_status"] == "+"].shape[0]}')
-    print(f'Number of nymph ticks with {name} without determined feeding time (before filtering): {df[(df["pathogen_status"] == "+") & (df["developmental_stage"] == "N") & (df["feeding_time"].isin(["?", np.nan]))].shape[0]}')
-    print(f'Number of ticks with {name} detected after filtering: {df_filtered[df_filtered["pathogen_status"] == "+"].shape[0]}')
-    print(f'Number of adult ticks with {name} detected before filtering: {df[(df["pathogen_status"] == "+") & (df["developmental_stage"] == "A")].shape[0]}')
-    print(f'Number of unique roe deer IDs with {name} detected after filtering: {df_filtered[df_filtered["pathogen_status"] == "+"]["roe_deer_id"].nunique()}')
+    print(f'Number of roe deers removed during filtering: {df["roe_deer_id"].nunique() - df_filtered["roe_deer_id"].nunique()}')
+    print(f'Number of ticks with {name} detected before filtering: {df[df["pathogen_status"] == "positive"].shape[0]}')
+    print(f'Number of nymph ticks with {name} without determined feeding time (before filtering): {df[(df["pathogen_status"] == "positive") & (df["developmental_stage"] == "N") & (df["feeding_time"].isin(["?", np.nan]))].shape[0]}')
+    print(f'Number of ticks with {name} detected after filtering: {df_filtered[df_filtered["pathogen_status"] == "positive"].shape[0]}')
+    print(f'Number of adult ticks with {name} detected before filtering: {df[(df["pathogen_status"] == "positive") & (df["developmental_stage"] == "A")].shape[0]}')
+    print(f'Number of unique roe deer IDs with {name} detected after filtering: {df_filtered[df_filtered["pathogen_status"] == "positive"]["roe_deer_id"].nunique()}')
+    
+    # 2. Transform the 'pathgoen_status' column to a binary variable, where 'positive' is 1 and 'negative' is 0 for both dataframes
+    df_filtered['pathogen_status'] = df_filtered['pathogen_status'].map({'positive': 1, 'negative': 0})
+    print(f'================== {name} pathogen status after transformation (1=positive, 0=negative) =================')
+    print(f'Check the unique values in the {name} dataframe after transformation: {df_filtered["pathogen_status"].unique()}')
+    print(f'Number of positive ticks in the {name} dataframe after transformation: {df_filtered[df_filtered["pathogen_status"] == 1].shape[0]}')
+    print(f'Number of negative ticks in the {name} dataframe after transformation: {df_filtered[df_filtered["pathogen_status"] == 0].shape[0]}')
+    
+    
     # save the filtered dataframe to a new variable
     if name == 'Borrelia':
         borrelia_df_filtered = df_filtered
     else:
         babesia_df_filtered = df_filtered
 
-# populate the 'pathogen_status' column with 'positive' for '+' and 'negative' for blank spaces for both dataframes
-for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'Babesia']):
-    print(f'================== {name} pathogen status =================')
-    df['pathogen_status'] = np.where(df['pathogen_status'] == '+', 'positive', 'negative')
-    print(f'Number of positive ticks in the {name} dataframe: {df[df["pathogen_status"] == "positive"].shape[0]}')
-    print(f'Number of negative ticks in the {name} dataframe: {df[df["pathogen_status"] == "negative"].shape[0]}')
 
 
-# Transform the 'pathgoen_status' column to a binary variable, where 'positive' is 1 and 'negative' is 0 for both dataframes
-for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'Babesia']):
-    df['pathogen_status'] = df['pathogen_status'].map({'positive': 1, 'negative': 0})
-    print(f'================== {name} pathogen status after transformation (1=positive, 0=negative) =================')
-    print(f'Check the unique values in the {name} dataframe after transformation: {df["pathogen_status"].unique()}')
-    print(f'Number of positive ticks in the {name} dataframe after transformation: {df[df["pathogen_status"] == 1].shape[0]}')
-    print(f'Number of negative ticks in the {name} dataframe after transformation: {df[df["pathogen_status"] == 0].shape[0]}')
-
-# define the colors to be used in the plots - grey for negative ticks and red for positive ticks
-colors = {'negative': 'grey', 'positive': 'red'}
-
-# Perform Simple logistic regression for both dataframes to assess the association between feeding time and pathogen prevalence, while accounting for the clustering effect of roe deer ID.
-for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'Babesia']):
+# 3. Perform Simple logistic regression for both dataframes to assess the association between feeding time and pathogen prevalence, while accounting for the clustering effect of roe deer ID.
     print(f'================== {name} Simple logistic regression =================')
     
     # Fit standard, unpenalized logistic regression
-    model = smf.logit('pathogen_status ~ feeding_time', data=df).fit()
+    model = smf.logit('pathogen_status ~ feeding_time', data=df_filtered).fit()
     
     # 1. Print the full summary table (includes coef, SE, z, P>|z|, and 95% CIs)
     print(model.summary())
@@ -156,7 +185,7 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     print(f"Slope (feeding_time): {slope:.4f} (SE = {slope_se:.4f}, p = {p_value:.4e})\n")
     
     # 3. Generate predictions for the logistic curve
-    feeding_time_range = np.linspace(df['feeding_time'].min(), df['feeding_time'].max(), 100)
+    feeding_time_range = np.linspace(df_filtered['feeding_time'].min(), df_filtered['feeding_time'].max(), 100)
     pred_df = pd.DataFrame({'feeding_time': feeding_time_range})
     predicted_probabilities = model.predict(pred_df)
     
@@ -165,7 +194,7 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     sns.scatterplot(
         x='feeding_time',
         y='pathogen_status',
-        data=df,
+        data=df_filtered,
         hue='pathogen_status',
         palette={0: colors['negative'], 1: colors['positive']},
         alpha=0.6
@@ -183,11 +212,10 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     plt.show()
     plt.close()
 
-# plot the number of positive and negative ticks for each roe deer ID in a stacked bar chart for both dataframes
-for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'Babesia']):
+# 4. Plot the number of positive and negative ticks for each roe deer ID in a stacked bar chart for both dataframes
     print(f'================== {name} stacked bar chart =================')
     # count the number of positive and negative ticks for each roe deer ID
-    tick_counts_by_deer = df.groupby(['roe_deer_id', 'pathogen_status']).size().unstack(fill_value=0).reset_index()
+    tick_counts_by_deer = df_filtered.groupby(['roe_deer_id', 'pathogen_status']).size().unstack(fill_value=0).reset_index()
     tick_counts_by_deer.columns = ['roe_deer_id', 'negative', 'positive']
     # plot the stacked bar chart
     plt.figure(figsize=(10, 6))
@@ -200,7 +228,6 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     plt.tight_layout()
     plt.show()
     plt.close()
-
 
 
 
@@ -221,30 +248,10 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     df['feeding_time'] = pd.to_numeric(df['feeding_time'])
     df['roe_deer_id'] = df['roe_deer_id'].astype(str)
 
-# ==============================================================================
-# 2. GENERALISED ESTIMATING EQUATION (GEE)
-# ==============================================================================
-    print("======================================================")
-    print(f" 1. GENERALISED ESTIMATING EQUATION (GEE) - statsmodels - {name}")
-    print("======================================================")
-
-# WHY WE DO THIS: The GEE adjusts the standard errors of our population-level 
-# estimate to account for the fact that ticks on the same deer are not independent.
-# 
-# cov_struct.Exchangeable() assumes that any two ticks collected from the same 
-# roe deer have the same baseline correlation in their probability of infection.
-    gee_model = smf.gee("pathogen_status ~ feeding_time", 
-                        groups=df['roe_deer_id'], 
-                        data=df, 
-                        family=sm.families.Binomial(), 
-                        cov_struct=sm.cov_struct.Exchangeable())
-
-    gee_result = gee_model.fit()
-    print(gee_result.summary())
 
 
 # ==============================================================================
-# 3. GENERALISED LINEAR MIXED MODEL (GLMM)
+# 2. GENERALISED LINEAR MIXED MODEL (GLMM)
 # ==============================================================================
     print("\n======================================================")
     print(f" 2. GENERALISED LINEAR MIXED MODEL (GLMM) - pure rpy2 bridge - {name}")
@@ -284,6 +291,15 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     # Step C: Execute the raw R script and print the result back into Python
     glmm_result = ro.r(r_script)
     print(f"GLMM Result - {name}: {glmm_result}")
+    
+    # Extract random effect variance using VarCorr() and calculate latent-scale ICC, which is the proportion of variance explained by the random effect (roe_deer_id)
+    icc_script = """
+    re_var <- as.numeric(VarCorr(glmm_model)$roe_deer_id)
+    icc_val <- re_var / (re_var + (pi^2 / 3))
+    icc_val
+    """
+    icc = ro.r(icc_script)[0]  # Extract the float from the R vector
+    print(f"ICC - {name}: {icc:.4f}")
 
 
 
@@ -299,7 +315,7 @@ q_borrelia_df = borrelia_df.copy()
 q_babesia_df = babesia_df.copy()
 
 for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
-    q_df['pathogen_status'] = np.where(q_df['pathogen_status'] == '+', 'positive', 'negative')
+    #q_df['pathogen_status'] = np.where(q_df['pathogen_status'] == '+', 'positive', 'negative')
     print(f'Number of positive ticks in the {name} dataframe: {q_df[q_df["pathogen_status"] == "positive"].shape[0]}')
     print(f'Number of negative ticks in the {name} dataframe: {q_df[q_df["pathogen_status"] == "negative"].shape[0]}')
     # keep only the positive ticks to analyse the quantity of pathogen in the ticks
@@ -318,11 +334,10 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     else:
         continue
 
-# Filtering the dataframes for qunatification analysis: only nymphs, no unknown feeding times, and no missing values in feeding time.        
+# Re-load the dataframes 
 q_borrelia_df = borrelia_df.copy()
 q_babesia_df = babesia_df.copy()
-
-# Remove 'B. miyamotoi' positive ticks from the quantification dataset of borrelia
+## Remove 'B. miyamotoi' positive ticks from the quantification dataset of borrelia
 q_borrelia_df = q_borrelia_df[q_borrelia_df['borrelia_species'] != 'B. miyamotoi']
 
 for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
@@ -339,7 +354,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     # Ensure the 'roe_deer_id' column is treated as a string (categorical variable)
     q_df['roe_deer_id'] = q_df['roe_deer_id'].astype(str)
     # transformt the 'pathogen_status' column to 'positive' for '+' and 'negative' for blank spaces
-    q_df['pathogen_status'] = np.where(q_df['pathogen_status'] == '+', 'positive', 'negative')
+    #q_df['pathogen_status'] = np.where(q_df['pathogen_status'] == '+', 'positive', 'negative')
     print(f'Number of positive ticks in the {name} dataframe: {q_df[q_df["pathogen_status"] == "positive"].shape[0]}')
     print(f'Number of negative ticks in the {name} dataframe: {q_df[q_df["pathogen_status"] == "negative"].shape[0]}')
     # keep only the positive ticks to analyse the quantity of pathogen in the ticks
@@ -437,5 +452,48 @@ plt.ylabel("Log10 Quantification per Tick", fontsize=12)
 plt.xlabel("Feeding Time (hours)", fontsize=12)
 plt.show()
 
+
+# %%
+# ============== CHI SQUARE TEST FOR THE CO-OCCURRENCE OF BORRELIA AND BABESIA IN THE TICKS ==============
+
+
+# load the data fresh without any of the filtering applied for the analyses above, as we want to assess the co-occurrence of the two pathogens in all ticks,
+# irrespective of tick stage and feeding time.
+
+borrelia_chi_df = borrelia_df.copy()
+babesia_chi_df = babesia_df.copy()
+
+
+# create a suffix on the 'pathogen_staus' column in both dataframes to distinguish between the two pathogens
+borrelia_chi_df.rename(columns={'pathogen_status': 'pathogen_status_borrelia'}, inplace=True)
+babesia_chi_df.rename(columns={'pathogen_status': 'pathogen_status_babesia'}, inplace=True)
+
+# merge the two dataframes on the 'ID.nr', keeping only 'ID.nr.', 'pathogen_status_borrelia', and 'pathogen_status_babesia' columns
+merged_df = pd.merge(borrelia_chi_df[['ID.nr.', 'pathogen_status_borrelia']], babesia_chi_df[['ID.nr.', 'pathogen_status_babesia']], on='ID.nr.', how='outer')
+print(f'Length of the merged dataframe: {len(merged_df)}')
+
+# Print the number and percentage of ticks positive for Borrelia, Babesia, and both pathogens (irrespective of tick stage and feeiding time)
+print(f'Number of ticks positive for Borrelia: {merged_df[merged_df["pathogen_status_borrelia"] == "positive"].shape[0]}')
+print(f'Percentage of ticks positive for Borrelia out of all ticks: {merged_df[merged_df["pathogen_status_borrelia"] == "positive"].shape[0] / len(merged_df) * 100:.2f}%')
+print(f'Number of ticks positive for Babesia: {merged_df[merged_df["pathogen_status_babesia"] == "positive"].shape[0]}')
+print(f'Percentage of ticks positive for Babesia out of all ticks: {merged_df[merged_df["pathogen_status_babesia"] == "positive"].shape[0] / len(merged_df) * 100:.2f}%')
+print(f'Number of ticks positive for both Borrelia and Babesia: {merged_df[(merged_df["pathogen_status_borrelia"] == "positive") & (merged_df["pathogen_status_babesia"] == "positive")].shape[0]}')
+print(f'Percentage of ticks positive for both Borrelia and Babesia out of all ticks: {merged_df[(merged_df["pathogen_status_borrelia"] == "positive") & (merged_df["pathogen_status_babesia"] == "positive")].shape[0] / len(merged_df) * 100:.2f}%')
+
+
+
+# Calculate the anticipated co-occurrence of Borrelia and Babesia in ticks
+print('================== Chi-square test for co-occurrence of Borrelia and Babesia in ticks =================')
+
+# Create a contingency table for the Chi-square test
+contingency_table = pd.crosstab(merged_df['pathogen_status_borrelia'], merged_df['pathogen_status_babesia'])
+print(f'Contingency table:\n{contingency_table}')
+
+# Perform the Chi-square test using scipy.stats (sp_stats)
+chi2, p_value, dof, expected = sp_stats.chi2_contingency(contingency_table)
+print(f'Chi-square statistic: {chi2:.2f}')
+print(f'P-value: {p_value:.4f}')
+print(f'Degrees of freedom: {dof}')
+print(f'Expected frequencies:\n{expected}')
 
 # %%
