@@ -1,11 +1,34 @@
-# tick-borne_pathogens_roe_deer
-This repository consists of the data of each individual tick analysed in the RåFäst project that was detached from roe deer in the Örebro area, Sweden. 
+# Tick-Borne Pathogen Prevalence and Quantification Analysis (*Borrelia* spp. and *Babesia* spp.)
 
-Each tick has information on the estimated feeding time, whether they are positive for Borrelia spp. and/or Babesia spp., qPCR quantification of each pathogen, and pathgeon species identity. 
+This repository consists of the data of each individual tick analysed in the RåFäst project that was detached from roe deer in the Örebro area, Sweden, and the statistical analysis pipeline accompanying the manuscript:
 
-The script performs statistical analyses on the the effect of feeding time on the prevalence and quantification of the pathogens. 
+**Pathogen-specific associations between feeding duration and detection of Borrelia and Babesia in Ixodes ricinus collected from roe deer**
+*Authors:* 
+[Peter Wilhelmsson1,2*†
+John Bergqvist1,5,6*
+Petter Kjellander3
+Hans Fredlund4
+Madeleine Christensson3
+Per-Eric Lindgren1,2
 
-To test if there are host-specific confounders in that specific roe deer individuals could affect the prevalence, we performed both Generalised Estimating Equation (GEE), that adjusts the standard errors of our population-level estimate to account for the fact that ticks on the same deer are not independent, and Generalised Linear Mixed Model (GLMM) explicitly models the variance caused by the host. The `(1 | roe_deer_id)` syntax calculates a "random intercept", meaning it allows the baseline probability of the pathogen to shift up or down for each individual deer. To perform the GLMM in a python script, we execute raw R code via rpy2 to access R's `lme4` package. 
+†Corresponding author
+*These authors contributed equally to this work.
 
-To test if there are host-specific confounders that could affect the quantification of the pathogens, we performed Linear Mixed Model (LMM) with roe deer id as a random intercept and a Conjugate Gradient (CG) optimiser to successfully converge the data. The default LMM optimiser did not converge the data, likely due to small sample size. 
+1 Division of Inflammation and Infection, Department of Biomedical and Clinical Sciences, Linköping University, Linköping, Sweden
+2 Division of Clinical Microbiology, Department of Laboratory Medicine, Region Jönköping County, Jönköping, Sweden
+3 Grimö Wildlife Research Station, Department of Ecology, Swedish University of Agricultural Sciences, Riddarhyttan, Sweden
+4 Department of Laboratory Medicine, Faculty of Medicine and Health, Örebro University, Örebro, Sweden
+5 Present address: MRC Laboratory of Medical Sciences, London, UK 
+6 Present address: Institute of Clinical Sciences, Imperial College London, London, UK]
+
+
+## Overview
+The script (`tick_pathogen_analysis.py`) performs data quality control, filtering, and statistical modeling to evaluate the relationship between *Ixodes ricinus* nymphal blood-feeding duration and pathogen prevalence/burden while accounting for host-level clustering across individual roe deer (*Capreolus capreolus*):
+1. **Pathogen Prevalence:** Univariable logistic regression (`statsmodels`) and binomial Generalized Linear Mixed Models (`lme4::glmer` via `rpy2`) with roe deer identity as a random intercept and latent-scale ICC calculation.
+2. **Pathogen Quantification:** Ordinary Least Squares (OLS) linear regression on $\log_{10}(x+1)$-transformed gene copy numbers, Breusch-Pagan homoscedasticity diagnostics, Spearman's rank-order correlation (`SciPy`), and Linear Mixed Models (`statsmodels` REML with L-BFGS optimization).
+3. **Co-infection Analysis:** Uncorrected Pearson's $\chi^2$ test of independence and Fisher's exact test (`SciPy`).
+
+## Environment & Dependencies
+* **Python:** 3.11.16 (`pandas` 3.0.6, `numpy` 2.4.6, `statsmodels` 0.15.0, `scipy` 1.17.1, `rpy2` 3.6.8, `matplotlib` 3.11.2, `seaborn` 0.13.2)
+* **R:** 4.5.1 (`lme4` 2.0.6)
 
