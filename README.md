@@ -3,9 +3,10 @@
 This repository consists of the data of each individual tick analysed in the RåFäst project that was detached from roe deer in the Örebro area, Sweden, and the statistical analysis pipeline accompanying the manuscript:
 
 **Pathogen-specific associations between feeding duration and detection of Borrelia and Babesia in Ixodes ricinus collected from roe deer**
+
 *Authors:* 
 
-[Peter Wilhelmsson 1,2*†
+Peter Wilhelmsson 1,2*†
 
 John Bergqvist 1,5,6*
 
@@ -31,7 +32,7 @@ Per-Eric Lindgren 1,2
 
 5 Present address: MRC Laboratory of Medical Sciences, London, UK 
 
-6 Present address: Institute of Clinical Sciences, Imperial College London, London, UK]
+6 Present address: Institute of Clinical Sciences, Imperial College London, London, UK
 
 
 ## Overview
