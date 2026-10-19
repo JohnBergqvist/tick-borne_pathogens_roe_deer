@@ -126,8 +126,7 @@ for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
 ###============================ PATHOGEN PREVALENCE ANALYSIS ============================###
 # This analsis is only performed on the nymphs.
 
-# define the colors to be used in the plots - grey for negative ticks and red for positive ticks
-colors = {'negative': 'grey', 'positive': 'red'}
+
 
 # 1. A loop that filters the two dataframes to only contain rows with the letter 'N' in the 'developmental_stage' column (nymphs),
 ## remove the rows with a '?' in the 'feeding_time' column (undetermined feeding times), and remove the rows with missing values 
@@ -194,33 +193,74 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
     predicted_probabilities = model.predict(pred_df)
     
     # 4. Initialize plot and draw observed data points
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(10, 5), dpi=300)
+    ax = plt.gca()
+    
     sns.scatterplot(
         x='feeding_time',
         y='pathogen_status',
         data=df_filtered,
-        hue='pathogen_status',
-        palette={0: colors['negative'], 1: colors['positive']},
-        alpha=0.6
+        color='black',
+        alpha=0.6,
+        s=50, # Slightly larger scatter points for visibility
+        ax=ax
     )
-    # Plot the logistic regression curve
-    plt.plot(feeding_time_range, predicted_probabilities, color='black', linewidth=2, label='Logistic Regression Curve')
-    plt.title(f'Logistic Regression of {name} Prevalence vs Feeding Time', fontsize=18)
-    plt.xlabel('Feeding Time (h)', fontsize=16)
-    plt.ylabel('Probability of Positive Tick', fontsize=16)
-    plt.xticks(fontsize=14)
-    plt.yticks(fontsize=14)
-    # define the position of the legend to be in the center right corner of the plot
-    plt.legend(title='', loc='center right')
+    
+    # Plot the logistic regression curve (linewidth 1.5 to match the LMM plot)
+    ax.plot(
+        feeding_time_range, predicted_probabilities, 
+        color='black', linewidth=2, label='Logistic regression curve'
+    )
+    
+    # Axis labels with bolding and italicized pathogen variable
+    ax.set_xlabel('Feeding time (h)', fontsize=16, fontweight='bold')
+    ax.set_ylabel(
+        rf'Probability of nymph with $\mathbfit{{{name}}}$ spp.', 
+        fontsize=16, 
+        fontweight='bold'
+    )
+    
+    # Thicken the tick marks and set label size
+    ax.tick_params(axis='both', which='major', labelsize=14, width=1.5, length=4)
+    ax.tick_params(axis='both', which='minor', width=1.0, length=3)
+
+    # Thicken the x-axis (bottom) and y-axis (left) lines
+    ax.spines['bottom'].set_linewidth(1.5)
+    ax.spines['left'].set_linewidth(1.5)
+
+    # make the x-ticks bold
+    for tick in ax.get_xticklabels():
+        tick.set_fontweight('bold')
+    # make the y-ticks bold
+    for tick in ax.get_yticklabels():
+        tick.set_fontweight('bold')
+
+    # x-axis should have ticks at 24, 48, 72, and 96, and y-axis should have ticks at 0, 0.25, 0.5, 0.75, and 1
+    ax.set_xticks([24, 48, 72, 96])
+    ax.set_yticks([0, 0.25, 0.5, 0.75, 1])
+    # the y-axis should be limited to -0.05 and 1.05 to avoid the scatter points at 0 and 1 being cut off
+    ax.set_ylim(-0.05, 1.05)
+
+    # Remove top and right spines for a clean publication look
+    sns.despine(ax=ax)
+    
+    # Clean legend formatting
+    #ax.legend(
+    #    frameon=True, facecolor='white', edgecolor='none', fontsize=10, loc='center right'
+    #)
+    
     plt.tight_layout()
     plt.show()
     plt.close()
+
 
 # 4. Plot the number of positive and negative ticks for each roe deer ID in a stacked bar chart for both dataframes
     print(f'================== {name} stacked bar chart =================')
     # count the number of positive and negative ticks for each roe deer ID
     tick_counts_by_deer = df_filtered.groupby(['roe_deer_id', 'pathogen_status']).size().unstack(fill_value=0).reset_index()
     tick_counts_by_deer.columns = ['roe_deer_id', 'negative', 'positive']
+    # define the colors to be used in the plots - grey for negative ticks and red for positive ticks
+    colors = {'negative': 'grey', 'positive': 'red'}
     # plot the stacked bar chart
     plt.figure(figsize=(10, 6))
     tick_counts_by_deer.set_index('roe_deer_id')[['negative', 'positive']].plot(kind='bar', stacked=True, ax=plt.gca(), color=[colors['negative'], colors['positive']])
