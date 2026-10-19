@@ -342,8 +342,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 # Re-load the dataframes 
 q_borrelia_df = borrelia_df.copy()
 q_babesia_df = babesia_df.copy()
-## Remove 'B. miyamotoi' positive ticks from the quantification dataset of borrelia
-q_borrelia_df = q_borrelia_df[q_borrelia_df['borrelia_species'] != 'B. miyamotoi']
+
 
 for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     print(f'================== {name} quantification analysis =================')
@@ -370,7 +369,13 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 
     # apply the edits to the df
     if name == 'Borrelia':
+        # Keep the log10 transformed quantification of B. miyamotoi positive ticks in a separate dataframe for late plotting, and remove them from the main dataframe for the statistical analyses.
+        b_miyamotoi_rows = q_df[q_df['borrelia_species'] == 'B. miyamotoi']
+        ## Remove 'B. miyamotoi' positive ticks from the quantification dataset of borrelia
+        q_df = q_df[q_df['borrelia_species'] != 'B. miyamotoi']
         q_df_borrelia = q_df.copy()
+
+
     else:
         q_df_babesia = q_df.copy()
 
@@ -432,27 +437,418 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 
 
 # The default lmm optimiser did not converge the data, likely due to small sample sizes.
-# The L-BFGS optimiser successfully converged both pathogen data, but the overall output remains the same
+# The L-BFGS optimiser successfully converged both pathogen data, but the overall output remains the same.
+
+# For Babesia spp., the 'ÖCT90-14-47' ID.nr. is an outlier at feeding time 92hrs. 
+# Removing this datapoint brings the p-value of the LMM from 0.028 to 0.052 for Babesia spp.
 
 
 
 # =============== Plotting the relationship between feeding time and log10-transformed quantification of pathogens in ticks ===============
-plt.figure(figsize=(6, 4))
-sns.regplot(data=q_df_borrelia, x='feeding_time', y='log_quantification_per_tick', ci=95)
-plt.title(f"Borrelia Load vs Feeding Time (N={len(q_df_borrelia)})")
-plt.ylabel("Log10 Quantification per Tick", fontsize=12)
-plt.xlabel("Feeding Time (hours)", fontsize=12)
-plt.show()
 
-# The 'ÖCT90-14-47' ID.nr. is an outlier at feeding time 92hrs. Removing this datapoint brings the p-value of the LMM from 0.028 to 0.052 for Babesia spp.
-#q_df_babesia = q_df_babesia[q_df_babesia['ID.nr.'] != 'ÖCT90-14-47']
+# ======= Plotting the Borrelia data, including that of B. miyamotoi, but excluding it from the LMM fixed effect line =======
+    if name == "Borrelia":
+        # 1. Define the explicit species list for "Other Borrelia s.l."
+        other_borrelia_species = [
+            'B. burgdorferi sensu stricto',
+            'B. valaisiana',
+            'B. garinii',
+            'B. anserine',
+            'B. burgdorferi isolate',
+            'B. burgdorfei isolate',
+            'B. burgdorferi strain',
+        ]
 
-plt.figure(figsize=(6, 4))
-sns.regplot(data=q_df_babesia, x='feeding_time', y='log_quantification_per_tick', ci=95)
-plt.title(f"Babesia Load vs Feeding Time (N={len(q_df_babesia)})")
-plt.ylabel("Log10 Quantification per Tick", fontsize=12)
-plt.xlabel("Feeding Time (hours)", fontsize=12)
-plt.show()
+        # 2. Categorize 'borrelia_species' into the 4 aesthetic groups
+        def categorize_borrelia(species):
+            if pd.isna(species):
+                return 'Untypeable'
+            sp_str = str(species).strip()
+            if sp_str == 'B. afzelii':
+                return 'B. afzelii'
+            elif sp_str == 'B. miyamotoi':
+                return 'B. miyamotoi'
+            elif sp_str in other_borrelia_species or sp_str.startswith('B. '):
+                return 'Other Borrelia spp.'
+            else:
+                return 'Untypeable'
+
+        # Combine the clean q_df_borrelia with b_miyamotoi_rows explicitly for plotting
+        plot_df = pd.concat([q_df_borrelia, b_miyamotoi_rows], ignore_index=True)
+        plot_df['plot_category'] = plot_df['borrelia_species'].apply(categorize_borrelia)
+
+        # 3. Initialize the figure
+        fig, ax = plt.subplots(figsize=(12, 7), dpi=300)
+
+        # 4. Extract the LMM fixed effects
+        lmm_intercept = lmm_result.params['Intercept']
+        lmm_slope = lmm_result.params['feeding_time']
+
+        # 5. Generate X values spanning the range of your feeding times
+        x_vals = np.array([plot_df['feeding_time'].min(), plot_df['feeding_time'].max()])
+
+        # 6. Calculate the predicted Y values based strictly on the LMM slope and intercept
+        y_vals = lmm_intercept + (lmm_slope * x_vals)
+
+        # 7. Plot the true LMM fixed-effect line
+        ax.plot(
+            x_vals, y_vals,
+            color='black',
+            linewidth=1.5,
+            label=r'LMM fixed effect (excl. $\it{B. miyamotoi}$)',
+            zorder=2
+        )
+
+        # 8. Compute and plot Median and Interquartile Range (IQR) for shared feeding times
+        iqr_stats = (
+            plot_df.groupby('feeding_time')['log_quantification_per_tick']
+            .agg(
+                count='count',
+                median='median',
+                q25=lambda x: np.percentile(x, 25),
+                q75=lambda x: np.percentile(x, 75),
+            )
+            .reset_index()
+        )
+
+        #multi_tick_times = iqr_stats[iqr_stats['count'] > 1]
+        #multi_tick_times = iqr_stats.copy()
+
+        if not iqr_stats.empty:
+            yerr_lower = iqr_stats['median'] - iqr_stats['q25']
+            yerr_upper = iqr_stats['q75'] - iqr_stats['median']
+
+            ax.errorbar(
+                iqr_stats['feeding_time'],
+                iqr_stats['median'],
+                yerr=[yerr_lower, yerr_upper],
+                fmt='none',  
+                ecolor='black',
+                elinewidth=1.2,
+                capsize=3.5, 
+                capthick=1.2,
+                zorder=3,
+            )
+
+            ax.scatter(
+                iqr_stats['feeding_time'],
+                iqr_stats['median'],
+                marker='_',
+                color='black',
+                s=150,  
+                linewidths=1.8,
+                zorder=4
+                # LABEL REMOVED HERE to keep it out of the legend
+            )
+
+        # 9. Define the exact marker aesthetics for each category
+        category_styles = {
+            'B. afzelii': {
+                'marker': 'o',  
+                'facecolors': 'black',
+                'edgecolors': 'black',
+                's': 55,
+                'linewidths': 1.2,
+                'zorder': 5,
+                'label': r'$\it{B.\ afzelii}$',
+            },
+            'Other Borrelia spp.': {
+                'marker': 'o',  
+                'facecolors': 'none',
+                'edgecolors': 'black',
+                's': 55,
+                'linewidths': 1.2,
+                'zorder': 5,
+                'label': r'Other $\it{Borrelia}$ spp.',
+            },
+            'B. miyamotoi': {
+                'marker': (6, 2, 0),  
+                'color': 'black',
+                's': 75,
+                'linewidths': 1.3,
+                'zorder': 5,
+                'label': r'$\it{B.\ miyamotoi}$',
+            },
+            'Untypeable': {
+                'marker': 'v',  
+                'facecolors': 'none',
+                'edgecolors': 'black',
+                's': 55,
+                'linewidths': 1.2,
+                'zorder': 5,
+                'label': 'Untypeable',
+            },
+        }
+
+        # 10. Plot each category layer by layer
+        for cat, style in category_styles.items():
+            sub_df = plot_df[plot_df['plot_category'] == cat]
+            if not sub_df.empty:
+                ax.scatter(
+                    sub_df['feeding_time'], sub_df['log_quantification_per_tick'], **style
+                )
+
+        # 11. Add the dotted horizontal line at y = 1 (Limit of Quantification)
+        ax.axhline(
+            y=1.0,
+            color='black',
+            linestyle=':',
+            linewidth=1.5,
+            zorder=1,
+            label='Limit of quantification',
+        )
+
+        # 12. Axis labels, ticks, and clean formatting
+        ax.set_xlabel('Feeding time (h)', fontsize=16, fontweight='bold')
+        ax.set_ylabel(
+            r'$\mathbf{log_{10}}$ ($\mathbfit{Borrelia}$ gene copies per tick)',
+            fontsize=16,
+            fontweight='bold',
+        )
+        # set ylimits to 1 and 5.5
+        ax.set_ylim(0, 5.5)
+        ax.tick_params(axis='both', which='major', labelsize=14, width=1.5, length=5.5)
+        
+        # Thicken the x-axis (bottom) and y-axis (left) lines
+        ax.spines['bottom'].set_linewidth(1.5)
+        ax.spines['left'].set_linewidth(1.5)
+        
+        # make the x-ticks bold
+        for tick in ax.get_xticklabels():
+            tick.set_fontweight('bold')
+        # make the y-ticks bold
+        for tick in ax.get_yticklabels():
+            tick.set_fontweight('bold')
+        # add minor ticks to both axes
+        ax.minorticks_on()
+
+        sns.despine(ax=ax)
+        
+        # ================= LEGEND REORDERING =================
+        handles, labels = ax.get_legend_handles_labels()
+        
+        # Define exact string matches for your target order
+        desired_order = [
+            r'$\it{B.\ afzelii}$',
+            r'$\it{B.\ miyamotoi}$',
+            r'Other $\it{Borrelia}$ spp.',
+            'Untypeable',
+            r'LMM fixed effect (excl. $\it{B. miyamotoi}$)',
+            'Limit of quantification'
+        ]
+        
+        # Map labels to their plotted handles safely
+        handle_dict = dict(zip(labels, handles))
+        
+        # Rebuild lists according to desired order (skipping any empty categories)
+        ordered_handles = [handle_dict[lbl] for lbl in desired_order if lbl in handle_dict]
+        ordered_labels = [lbl for lbl in desired_order if lbl in handle_dict]
+        
+        ax.legend(
+            ordered_handles, ordered_labels,
+            frameon=True, facecolor='none', edgecolor='none', fontsize=12, loc='best'
+        )
+        # ==========================================================
+
+        plt.tight_layout()
+        plt.show()
+        
+    else:
+        
+        # ======= Plotting the Borrelia data with the LMM fixed effect line =======
+        
+        # Defining the plotting style and aesthetics for the Babesia plot only:
+            # There should be a dotted horizontal line at y=2, indicating the quantifying limit of the assay for Babesia spp.
+            # Aesthetics of individual points:
+            # 'babesia_species' == 'B. venatorum' : round marker, filled in, color = 'black'
+            # 'babesia_species' == 'B. microti' : round marker, unfilled, color = 'black'
+            # 'babesia_species' == 'B. capreoli' : triangle, unfilled, color = 'black'
+
+        # 1. Define the explicit species list for Babesia spp.
+        babesia_species = ['B. venatorum', 'B. microti', 'B. capreoli']
+
+        # 2. Categorize 'babesia_species' into the 3 aesthetic groups
+        def categorize_babesia(species):
+            sp_str = str(species).strip()
+            if sp_str == 'B. venatorum':
+                return 'B. venatorum'
+            elif sp_str == 'B. microti':
+                return 'B. microti'
+            elif sp_str == 'B. capreoli':
+                return 'B. capreoli'
+            else:
+                return 'Untypeable'
+
+        plot_df = q_df_babesia.copy()
+        plot_df['plot_category'] = plot_df['babesia_species'].apply(categorize_babesia)
+
+        # 3. initialise the figure
+        fig, ax = plt.subplots(figsize=(12, 7), dpi=300)
+
+        # 4. Extract the LMM fixed effects
+        lmm_intercept = lmm_result.params['Intercept']
+        lmm_slope = lmm_result.params['feeding_time']
+
+        # 5. Generate X values spanning the range of your feeding times
+        x_vals = np.array([plot_df['feeding_time'].min(), plot_df['feeding_time'].max()])
+
+        # 6. Calculate the predicted Y values based strictly on the LMM slope and intercept
+        y_vals = lmm_intercept + (lmm_slope * x_vals)
+
+        # 7. Plot the true LMM fixed-effect line
+        ax.plot(
+            x_vals, y_vals,
+            color='black',
+            linewidth=1.5,
+            label=r'LMM fixed effect',
+            zorder=2
+        )
+
+        # 8. Compute and plot Median and Interquartile Range (IQR) for shared feeding times
+        iqr_stats = (
+            plot_df.groupby('feeding_time')['log_quantification_per_tick']
+            .agg(
+                count='count',
+                median='median',
+                q25=lambda x: np.percentile(x, 25),
+                q75=lambda x: np.percentile(x, 75),
+            )
+            .reset_index()
+        )
+
+        if not iqr_stats.empty:
+            yerr_lower = iqr_stats['median'] - iqr_stats['q25']
+            yerr_upper = iqr_stats['q75'] - iqr_stats['median']
+
+            ax.errorbar(
+                iqr_stats['feeding_time'],
+                iqr_stats['median'],
+                yerr=[yerr_lower, yerr_upper],
+                fmt='none',  
+                ecolor='black',
+                elinewidth=1.2,
+                capsize=3.5, 
+                capthick=1.2,
+                zorder=3,
+            )
+
+            ax.scatter(
+                iqr_stats['feeding_time'],
+                iqr_stats['median'],
+                marker='_',
+                color='black',
+                s=150,  
+                linewidths=1.8,
+                zorder=4
+            )
+        # 9. Define the exact marker aesthetics for each category
+        category_styles = {
+            'B. venatorum': {
+                'marker': 'o',  
+                'facecolors': 'black',
+                'edgecolors': 'black',
+                's': 55,
+                'linewidths': 1.2,
+                'zorder': 5,
+                'label': r'$\it{B.\ venatorum}$',
+            },
+            'B. microti': {
+                'marker': 'o',  
+                'facecolors': 'none',
+                'edgecolors': 'black',
+                's': 55,
+                'linewidths': 1.2,
+                'zorder': 5,
+                'label': r'$\it{B.\ microti}$',
+            },
+            'B. capreoli': {
+                'marker': '^',  
+                'facecolors': 'none',
+                'edgecolors': 'black',
+                's': 55,
+                'linewidths': 1.2,
+                'zorder': 5,
+                'label': r'$\it{B.\ capreoli}$',
+            },
+            'Untypeable': {
+                'marker': (6, 2, 0),  
+                'color': 'black',
+                's': 75,
+                'linewidths': 1.3,
+                'zorder': 5,
+                'label': 'Untypeable',
+            },
+        }
+
+        # 10. Plot each category layer by layer
+        for cat, style in category_styles.items():
+            sub_df = plot_df[plot_df['plot_category'] == cat]
+            if not sub_df.empty:
+                ax.scatter(
+                    sub_df['feeding_time'], sub_df['log_quantification_per_tick'], **style
+                )
+        # 11. Add the dotted horizontal line at y = 2 (Limit of Quantification)
+        ax.axhline(
+            y=2.0,
+            color='black',
+            linestyle=':',
+            linewidth=1.5,
+            zorder=1,
+            label='Limit of quantification',
+        )
+
+        # 12. Axis labels, ticks, and clean formatting
+        ax.set_xlabel('Feeding time (h)', fontsize=16, fontweight='bold')
+        ax.set_ylabel(
+            r'$\mathbf{log_{10}}$ ($\mathbfit{Babesia}$ gene copies per tick)',
+            fontsize=16,
+            fontweight='bold',
+        )
+        # set ylimits to 1 and 6
+        ax.set_ylim(0, 6)
+        ax.tick_params(axis='both', which='major', labelsize=14, width=1.5, length=6)
+        
+        # Thicken the x-axis (bottom) and y-axis (left) lines
+        ax.spines['bottom'].set_linewidth(1.5)
+        ax.spines['left'].set_linewidth(1.5)
+
+        # make the x-ticks bold
+        for tick in ax.get_xticklabels():
+            tick.set_fontweight('bold')
+        # make the y-ticks bold
+        for tick in ax.get_yticklabels():
+            tick.set_fontweight('bold')
+        # add minor ticks to both axes
+        ax.minorticks_on()
+
+        sns.despine(ax=ax)
+
+        # ================= LEGEND REORDERING =================
+        handles, labels = ax.get_legend_handles_labels()
+        # define the exact string matches for your target order
+        desired_order = [
+            r'$\it{B.\ venatorum}$',
+            r'$\it{B.\ microti}$',
+            r'$\it{B.\ capreoli}$',
+            'Untypeable',
+            r'LMM fixed effect',
+            'Limit of quantification'
+        ]
+
+        # map labels to their plotted handles safely
+        handle_dict = dict(zip(labels, handles))
+
+        # rebuild lists according to desired order (skipping any empty categories)
+        ordered_handles = [handle_dict[lbl] for lbl in desired_order if lbl in handle_dict]
+        ordered_labels = [lbl for lbl in desired_order if lbl in handle_dict]
+
+        ax.legend(
+            ordered_handles, ordered_labels,
+            frameon=True, facecolor='none', edgecolor='none', fontsize=12, loc='best'
+        )
+        plt.tight_layout()
+        plt.show()
+
 
 
 # %%
@@ -509,6 +905,8 @@ print(f'Uncorrected Chi2: {chi2_uncorr:.4f} (p = {p_uncorr:.4f})')
 print(f'Yates-corrected Chi2: {chi2_yates:.4f} (p = {p_yates:.4f})')
 print(f"Fisher's Exact Test OR: {odds_ratio:.4f} (p = {fisher_p:.4f})")
 
+
+
 # %%
 # ================== PRINTING THE VERSIONS OF THE LIBRARIES USED IN THIS SCRIPT =================
 
@@ -521,6 +919,7 @@ import scipy
 import seaborn as sns
 import statsmodels
 from importlib.metadata import version
+
 
 print(f'Matplotlib: {matplotlib.__version__}') # only for plotting, not for analysis
 print(f'Seaborn: {sns.__version__}') # only for plotting, not for analysis
