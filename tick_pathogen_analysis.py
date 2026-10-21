@@ -641,7 +641,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
         # 12. Axis labels, ticks, and clean formatting
         ax.set_xlabel('Feeding time (h)', fontsize=16, fontweight='bold')
         ax.set_ylabel(
-            r'$\mathbf{log_{10}}$ ($\mathbfit{Borrelia}$ gene copies per tick)',
+            r'$\mathbf{log_{10}}$ ($\mathbfit{Borrelia}$ cells per nymph)',
             fontsize=16,
             fontweight='bold',
         )
@@ -840,7 +840,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
         # 12. Axis labels, ticks, and clean formatting
         ax.set_xlabel('Feeding time (h)', fontsize=16, fontweight='bold')
         ax.set_ylabel(
-            r'$\mathbf{log_{10}}$ ($\mathbfit{Babesia}$ gene copies per tick)',
+            r'$\mathbf{log_{10}}$ ($\mathbfit{Babesia}$ gene copies per nymph)',
             fontsize=16,
             fontweight='bold',
         )
