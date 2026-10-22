@@ -37,7 +37,7 @@ from rpy2.robjects.conversion import localconverter
 #%%
 
 # Directories 
-# define the HOME_DIR as the place where the scirpt is located, and print it to the console
+# define the HOME_DIR as the place where the script is located and where the data is stored, and print it to the console
 print(f'HOME_DIR: {Path(__file__).resolve().parent}')
 HOME_DIR = Path(__file__).resolve().parent
 
