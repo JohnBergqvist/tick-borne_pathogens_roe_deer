@@ -98,14 +98,14 @@ for df, name in zip([borrelia_df, babesia_df], ['Borrelia', 'Babesia']):
     larva_roe_deer_ids = df[df['developmental_stage'] == 'L']
     print(f'Number of unique roe deer IDs with larva ticks: {larva_roe_deer_ids[larva_roe_deer_ids["developmental_stage"] == "L"]["roe_deer_id"].nunique()}')
     # print the number and the unique roe_deer_ids that overlap between the adult and nymph ticks
-    overlap_roe_deer_ids = set(adult_roe_deer_ids['roe_deer_id']).intersection(set(nymph_roe_deer_ids['roe_deer_id']))
-    print(f'Number of unique roe deer IDs with both adult and nymph ticks: {len(overlap_roe_deer_ids)}')
-    print(f'Unique roe deer IDs with both adult and nymph ticks: {overlap_roe_deer_ids}')
+    overlap_roe_deer_ids_a_n = set(adult_roe_deer_ids['roe_deer_id']).intersection(set(nymph_roe_deer_ids['roe_deer_id']))
+    print(f'Number of unique roe deer IDs with both adult and nymph ticks: {len(overlap_roe_deer_ids_a_n)}')
+    print(f'Unique roe deer IDs with both adult and nymph ticks: {overlap_roe_deer_ids_a_n}')
 
     # print the number and the unique roe_deer_ids that overlap between the nymph and larva ticks
-    overlap_roe_deer_ids = set(nymph_roe_deer_ids['roe_deer_id']).intersection(set(larva_roe_deer_ids['roe_deer_id']))
-    print(f'Number of unique roe deer IDs with both nymph and larva ticks: {len(overlap_roe_deer_ids)}')
-    print(f'Unique roe deer IDs with both nymph and larva ticks: {overlap_roe_deer_ids}')
+    overlap_roe_deer_ids_n_l = set(nymph_roe_deer_ids['roe_deer_id']).intersection(set(larva_roe_deer_ids['roe_deer_id']))
+    print(f'Number of unique roe deer IDs with both nymph and larva ticks: {len(overlap_roe_deer_ids_n_l)}')
+    print(f'Unique roe deer IDs with both nymph and larva ticks: {overlap_roe_deer_ids_n_l}')
     # print the number of unique row deer IDs that have a '?' or 'NaN' in 'feeding_time' column
     print(f'Number of unique tick ID "ID.nr." with unknown feeding time: {df[df["feeding_time"].isin(["?", np.nan])]["ID.nr."].nunique()}')
     # change the 'pathogen_status' column to 'positive' for '+' and 'negative' for blank spaces in both dataframes
@@ -354,7 +354,7 @@ for df, name in zip([borrelia_df_filtered, babesia_df_filtered], ['Borrelia', 'B
 
 #####==================== PATHOGEN QUANTIFICATION ANALYSIS====================#####
 
-# Checking the range of quantification values for both pathogens, and the number of positive and negative ticks in each dataframe.
+# Checking the range of target_copy_numbers_per_tick values for both pathogens, and the number of positive and negative ticks in each dataframe.
 q_borrelia_df = borrelia_df.copy()
 q_babesia_df = babesia_df.copy()
 
@@ -365,17 +365,17 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     # keep only the positive ticks to analyse the quantity of pathogen in the ticks
     q_df = q_df[q_df['pathogen_status'] == 'positive']
     print(f'Before any filtering, the {name} dataframe has {len(q_df)} rows ({name}-positive ticks).')
-    q_df['quantification'] = pd.to_numeric(q_df['quantification'], errors='coerce')
-    print(f"Range of quantification values for {name}: min={q_df['quantification'].min():.2e}, max={q_df['quantification'].max():.2e}, median={q_df['quantification'].median():.2e}")
+    q_df['target_copy_numbers_per_tick'] = pd.to_numeric(q_df['target_copy_numbers_per_tick'], errors='coerce')
+    print(f"Range of target_copy_numbers_per_tick values for {name}: min={q_df['target_copy_numbers_per_tick'].min():.2e}, max={q_df['target_copy_numbers_per_tick'].max():.2e}, median={q_df['target_copy_numbers_per_tick'].median():.2e}")
     adults = q_df[q_df['developmental_stage'] == 'A']
-    print(f'Range of quantification values for {name} in adult ticks: number of observations={len(adults)}, min={adults["quantification"].min():.2e}, max={adults["quantification"].max():.2e}, median={adults["quantification"].median():.2e}')
+    print(f'Range of target_copy_numbers_per_tick values for {name} in adult ticks: number of observations={len(adults)}, min={adults["target_copy_numbers_per_tick"].min():.2e}, max={adults["target_copy_numbers_per_tick"].max():.2e}, median={adults["target_copy_numbers_per_tick"].median():.2e}')
     nymphs = q_df[q_df['developmental_stage'] == 'N']
-    print(f'Range of quantification values for {name} in nymph ticks: number of observations={len(nymphs)}, min={nymphs["quantification"].min():.2e}, max={nymphs["quantification"].max():.2e}, median={nymphs["quantification"].median():.2e}')
+    print(f'Range of target_copy_numbers_per_tick values for {name} in nymph ticks: number of observations={len(nymphs)}, min={nymphs["target_copy_numbers_per_tick"].min():.2e}, max={nymphs["target_copy_numbers_per_tick"].max():.2e}, median={nymphs["target_copy_numbers_per_tick"].median():.2e}')
     if name == 'Borrelia':
         # remove the 'B. miyamotoi' positive ticks from the quantification dataset of borrelia
         nymphs_no_Bm = nymphs[nymphs['borrelia_species'] != 'B. miyamotoi']
         print(f'After removing B. miyamotoi positive ticks, the {name} dataframe has {len(nymphs_no_Bm)} rows ({name}-positive ticks).')
-        print(f"Range of quantification values for {name} after removing B. miyamotoi: min={nymphs_no_Bm['quantification'].min():.2e}, max={nymphs_no_Bm['quantification'].max():.2e}, median={nymphs_no_Bm['quantification'].median():.2e}")
+        print(f"Range of target_copy_numbers_per_tick values for {name} after removing B. miyamotoi: min={nymphs_no_Bm['target_copy_numbers_per_tick'].min():.2e}, max={nymphs_no_Bm['target_copy_numbers_per_tick'].max():.2e}, median={nymphs_no_Bm['target_copy_numbers_per_tick'].median():.2e}")
     else:
         continue
 
@@ -402,16 +402,16 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     # keep only the positive ticks to analyse the quantity of pathogen in the ticks
     q_df = q_df[q_df['pathogen_status'] == 'positive']
     print(f'Length of the dataframe with only positive ticks: {len(q_df)}')
-    # transform the 'quantification' column to numeric
-    q_df['quantification'] = pd.to_numeric(q_df['quantification'], errors='coerce')
-    # transform the 'quantification' column to log10 scale, and add a small constant to avoid log(0)
-    q_df['log_quantification_per_tick'] = np.log10(q_df['quantification'] + 1)
+    # transform the 'target_copy_numbers_per_tick' column to numeric
+    q_df['target_copy_numbers_per_tick'] = pd.to_numeric(q_df['target_copy_numbers_per_tick'], errors='coerce')
+    # transform the 'target_copy_numbers_per_tick' column to log10 scale, and add a small constant to avoid log(0)
+    q_df['log_target_copy_numbers_per_tick'] = np.log10(q_df['target_copy_numbers_per_tick'] + 1)
 
     # apply the edits to the df
     if name == 'Borrelia':
-        # Keep the log10 transformed quantification of B. miyamotoi positive ticks in a separate dataframe for late plotting, and remove them from the main dataframe for the statistical analyses.
+        # Keep the log10 transformed target_copy_numbers_per_tick of B. miyamotoi positive ticks in a separate dataframe for late plotting, and remove them from the main dataframe for the statistical analyses.
         b_miyamotoi_rows = q_df[q_df['borrelia_species'] == 'B. miyamotoi']
-        ## Remove 'B. miyamotoi' positive ticks from the quantification dataset of borrelia
+        ## Remove 'B. miyamotoi' positive ticks from the target_copy_numbers_per_tick dataset of borrelia
         q_df = q_df[q_df['borrelia_species'] != 'B. miyamotoi']
         q_df_borrelia = q_df.copy()
 
@@ -424,7 +424,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     print(f" LINEAR REGRESSION (OLS) - statsmodels - {name} ")
     print("======================================================")
     # Fit standard, unpenalized linear regression
-    model = smf.ols('log_quantification_per_tick ~ feeding_time', data=q_df).fit()
+    model = smf.ols('log_target_copy_numbers_per_tick ~ feeding_time', data=q_df).fit()
     
     # 1. Print the full summary table (includes coef, SE, t, P>|t|, and 95% CIs)
     print(model.summary())
@@ -452,7 +452,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     print(f" SPEARMAN RANK-ORDER CORRELATION - statsmodels - {name} ")
     print("======================================================")
     rho, spearman_p = spearmanr(
-        q_df['feeding_time'], q_df['log_quantification_per_tick']
+        q_df['feeding_time'], q_df['log_target_copy_numbers_per_tick']
     )
     print(
         f"Spearman's rank correlation (rho): {rho:.4f} (p = {spearman_p:.4e})\n"
@@ -468,7 +468,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
     # Fit the Linear Mixed Model
     # smf.mixedlm automatically applies a linear (Gaussian) family 
     # and sets the random intercept based on the 'groups' argument.
-    lmm_model = smf.mixedlm("log_quantification_per_tick ~ feeding_time", 
+    lmm_model = smf.mixedlm("log_target_copy_numbers_per_tick ~ feeding_time", 
                             q_df, 
                             groups=q_df["roe_deer_id"])
     lmm_result = lmm_model.fit(method='lbfgs')  # Use L-BFGS optimizer for convergence
@@ -541,7 +541,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 
         # 8. Compute and plot Median and Interquartile Range (IQR) for shared feeding times
         iqr_stats = (
-            plot_df.groupby('feeding_time')['log_quantification_per_tick']
+            plot_df.groupby('feeding_time')['log_target_copy_numbers_per_tick']
             .agg(
                 count='count',
                 median='median',
@@ -625,7 +625,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
             sub_df = plot_df[plot_df['plot_category'] == cat]
             if not sub_df.empty:
                 ax.scatter(
-                    sub_df['feeding_time'], sub_df['log_quantification_per_tick'], **style
+                    sub_df['feeding_time'], sub_df['log_target_copy_numbers_per_tick'], **style
                 )
 
         # 11. Add the dotted horizontal line at y = 1 (Limit of Quantification)
@@ -641,12 +641,12 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
         # 12. Axis labels, ticks, and clean formatting
         ax.set_xlabel('Feeding time (h)', fontsize=16, fontweight='bold')
         ax.set_ylabel(
-            r'$\mathbf{log_{10}}$ ($\mathbfit{Borrelia}$ cells per nymph)',
+            r'$\mathbf{log_{10}}$ 16S rRNA target copy numbers of $\mathbfit{Borrelia}$',
             fontsize=16,
             fontweight='bold',
         )
-        # set ylimits to 1 and 5.5
-        ax.set_ylim(0, 5.5)
+        # set ylimits to 1 and 7
+        ax.set_ylim(0, 7)
         ax.tick_params(axis='both', which='major', labelsize=14, width=1.5, length=5.5)
         
         # Thicken the x-axis (bottom) and y-axis (left) lines
@@ -746,7 +746,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
 
         # 8. Compute and plot Median and Interquartile Range (IQR) for shared feeding times
         iqr_stats = (
-            plot_df.groupby('feeding_time')['log_quantification_per_tick']
+            plot_df.groupby('feeding_time')['log_target_copy_numbers_per_tick']
             .agg(
                 count='count',
                 median='median',
@@ -825,7 +825,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
             sub_df = plot_df[plot_df['plot_category'] == cat]
             if not sub_df.empty:
                 ax.scatter(
-                    sub_df['feeding_time'], sub_df['log_quantification_per_tick'], **style
+                    sub_df['feeding_time'], sub_df['log_target_copy_numbers_per_tick'], **style
                 )
         # 11. Add the dotted horizontal line at y = 2 (Limit of Quantification)
         ax.axhline(
@@ -840,7 +840,7 @@ for q_df, name in zip([q_borrelia_df, q_babesia_df], ['Borrelia', 'Babesia']):
         # 12. Axis labels, ticks, and clean formatting
         ax.set_xlabel('Feeding time (h)', fontsize=16, fontweight='bold')
         ax.set_ylabel(
-            r'$\mathbf{log_{10}}$ ($\mathbfit{Babesia}$ gene copies per nymph)',
+            r'$\mathbf{log_{10}}$ 18S rRNA target copy numbers of $\mathbfit{Babesia}$',
             fontsize=16,
             fontweight='bold',
         )
